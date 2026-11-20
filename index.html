@@ -5241,13 +5241,11 @@ const REALSPEC={
  vaz:{L:4.15,rot:0,paint:['CarBody'],auto:1,wr:.3,glass:/^Windows$/},
  datsun:{L:4.12,rot:0,paint:['car_datsun'],wm:/^material$/},
  dodge:{L:5.02,rot:0,paint:['CarPaint','CarPAint_Plastic'],auto:1,wr:.35},
- lancia:{L:3.95,rot:0,paintRe:/(Coloured|Paint)_Material1$/,nomapRe:/Paint_Material1$/,wm:/Wheel1A|Calliper/},
  porsche:{L:4.5,rot:0,paint:['paint'],auto:1,wr:.34},
  alfa:{rt:1,cabin:[-.55,.55,.36,.74,-1.3,.45],smooth:1.1,L:3.97,rot:0,paint:['forMayaAOlambert17'],auto:1,wr:.31},
  giotto:{cabin:[-.7,.7,.3,1.0,-1.35,.75],L:4.7,rot:0,paintRe:/^Jiotto_Caspita/,auto:1,wr:.34},
  audi:{L:4.43,rot:0,paint:['body.001'],wm:/^(blur_lip|inner_rim|rim|tire)\.001$/},
  cutlass:{L:5.2,rot:0,paint:['M_Paint'],nomap:true,wm:/^M_Wheel$/,glass:/^M_Glass$/},
- lincoln:{L:5.7,rot:0,paint:['Paint','PaintSec','Body','BodySec'],nomap:true,cut:1,wm:/^Wheel$/,glass:/^Glass(_IOR)?$/},
  landcruiser:{L:4.6,rot:0,paint:[],key:'m=smoothstep(.3,.45,l)*(1.-smoothstep(.15,.3,sat));',auto:1},
  cherokee:{L:4.2,rot:0,paint:[],key:'m=smoothstep(.1,.25,sat)*smoothstep(.12,.28,l);',auto:1},
  rusty:{L:4.9,rot:0,paint:[],key:'m=smoothstep(.1,.25,sat)*smoothstep(.12,.28,l);',auto:1},
@@ -5451,22 +5449,36 @@ function addKit(R,t,paint,body,dark){
   }
 }
 
-/* ---------- procedural rims: 0 = classic 5-slot, 1 = BBS-style 10 twin spokes, 2 = deep-dish mesh ---------- */
-function procRim(style,r,hw,sd,rimM,darkM,accM){
-  const g=new THREE.Group(),rr=r*.7,X=(k)=>sd*hw*k,mesh=(geo,m,x)=>{const o=new THREE.Mesh(geo,m);o.position.x=x;o.castShadow=true;g.add(o);return o};
-  // barrel / dark background disc
-  mesh(new THREE.CylinderGeometry(rr*.97,rr*.97,hw*.1,40).rotateZ(Math.PI/2),darkM,X(style===2?.45:.62));
-  // outer lip
-  const lipX=X(style===2?.92:.86);
-  mesh(new THREE.TorusGeometry(rr,rr*(style===2?.075:.05),10,48).rotateY(Math.PI/2),rimM,lipX);
-  if(style===2)mesh(new THREE.TorusGeometry(rr*.9,rr*.04,8,48).rotateY(Math.PI/2),rimM,X(.6));
+/* ---------- wheels: fully procedural tyre + rim per car ---------- */
+const WCOL={silver:0xcfd2d8,gun:0x3b3e46,chrome:0xf5f7fa,black:0x16171a,gold:0xc8a24a,rust:0x7a5238,white:0xe8e8e2};
+const WSPEC={vaz:{rin:13,s:'steel',c:'silver'},datsun:{rin:14,s:'steel',c:'chrome'},skyline:{rin:17,s:'multi',c:'gun'},gtr:{rin:20,s:'twin5',c:'gun'},dodge:{rin:20,s:'five',c:'black'},
+ impala:{rin:15,s:'magnum',c:'chrome',ww:1},cutlass:{rin:15,s:'magnum',c:'chrome',ww:1},countach:{rin:17,s:'turbine',c:'gun'},porsche:{rin:19,s:'split',c:'silver'},ghost:{rin:21,s:'multi',c:'chrome'},
+ alfa:{rin:15,s:'dial',c:'silver'},giotto:{rin:17,s:'five',c:'gold'},terzo:{rin:21,s:'aero',c:'black'},corvette:{rin:18,s:'twin5',c:'silver'},audi:{rin:19,s:'split',c:'gun'},
+ suv:{rin:18,s:'multi',c:'silver'},landcruiser:{rin:17,s:'steel',c:'black'},cherokee:{rin:16,s:'five',c:'silver'},rusty:{rin:15,s:'steel',c:'rust'},phoenix:{rin:15,s:'magnum',c:'silver'}};
+function rimInfo(key,Ro){const sp=WSPEC[key]||{rin:17},max=Math.max(sp.rin,Math.min(sp.rin+5,Math.floor((Ro||.33)*.86/.0127)));return{stock:sp.rin,max}}
+function procWheel(style,Rr,Ro,hw,sd,rimM,darkM,accM,tyreM,ww){
+  const g=new THREE.Group(),X=k=>sd*hw*k,mesh=(geo,m,x)=>{const o=new THREE.Mesh(geo,m);o.position.x=x;o.castShadow=true;g.add(o);return o};
+  // tyre: smooth profile whose height follows rim size
+  const sh=Ro-Rr,P=[[Rr*.96,.58],[Rr+sh*.12,.9],[Rr+sh*.45,1],[Rr+sh*.85,.92],[Ro*.992,.6],[Ro,.3]],pts=[];
+  for(const q of P)pts.push(new THREE.Vector2(q[0],-q[1]*hw));pts.push(new THREE.Vector2(Ro,0));for(let i=P.length-1;i>=0;i--)pts.push(new THREE.Vector2(P[i][0],P[i][1]*hw));
+  mesh(new THREE.LatheGeometry(pts,40).rotateZ(Math.PI/2),tyreM,0);
+  if(ww){const wm=new THREE.MeshStandardMaterial({color:0xf2f2ee,roughness:.8});for(const k of[-1,1])mesh(new THREE.RingGeometry(Rr+sh*.3,Rr+sh*.62,40).rotateY(k*Math.PI/2),wm,k*hw*.992)}
+  const rr=Rr*.985;
+  mesh(new THREE.CylinderGeometry(rr*.96,rr*.96,hw*.1,40).rotateZ(Math.PI/2),darkM,X(.55)); // barrel
+  mesh(new THREE.TorusGeometry(rr,Math.max(.012,rr*.05),10,48).rotateY(Math.PI/2),rimM,X(.9)); // lip
   const bar=(a0,r0,a1,r1,w,d,x,m)=>{const p0=new THREE.Vector3(x,r0*Math.cos(a0),r0*Math.sin(a0)),p1=new THREE.Vector3(x,r1*Math.cos(a1),r1*Math.sin(a1)),L=p0.distanceTo(p1);
     const o=new THREE.Mesh(new THREE.BoxGeometry(d,w,L),m);o.position.copy(p0).add(p1).multiplyScalar(.5);o.up.set(1,0,0);o.lookAt(p1);o.castShadow=true;g.add(o)};
-  const sx=X(style===2?.74:.8),hub=rr*.2;
-  if(style===0){for(let i=0;i<5;i++){const a=i*Math.PI*2/5;bar(a,hub,a,rr*.96,rr*.3,hw*.13,sx,rimM)}}
-  else if(style===1){for(let i=0;i<5;i++){const a=i*Math.PI*2/5;for(const j of[-1,1]){bar(a+j*.3,hub*1.2,a+j*.11,rr*.96,rr*.095,hw*.16,sx,rimM)}}}
-  else{for(let i=0;i<18;i++){const a=i*Math.PI*2/18;bar(a,hub*1.1,a+.34,rr*.96,rr*.04,hw*.1,sx,rimM);bar(a,hub*1.1,a-.34,rr*.96,rr*.04,hw*.1,sx-sd*hw*.05,rimM)}}
-  // hub + centre cap
+  const sx=X(.78),hub=rr*.2,N=(n,f)=>{for(let i=0;i<n;i++)f(i*Math.PI*2/n,i)};
+  if(style==='five')N(5,a=>bar(a,hub,a,rr*.96,rr*.3,hw*.13,sx,rimM));
+  else if(style==='twin5')N(5,a=>{for(const j of[-1,1])bar(a+j*.3,hub*1.2,a+j*.11,rr*.96,rr*.095,hw*.16,sx,rimM)});
+  else if(style==='multi')N(18,a=>{bar(a,hub*1.1,a+.34,rr*.96,rr*.04,hw*.1,sx,rimM);bar(a,hub*1.1,a-.34,rr*.96,rr*.04,hw*.1,sx-sd*hw*.05,rimM)});
+  else if(style==='split')N(5,a=>{bar(a,hub,a,rr*.62,rr*.2,hw*.14,sx,rimM);for(const j of[-1,1])bar(a,rr*.58,a+j*.2,rr*.96,rr*.1,hw*.14,sx,rimM)});
+  else if(style==='turbine')N(12,a=>bar(a,hub*1.2,a+.55,rr*.96,rr*.16,hw*.07,sx,rimM));
+  else if(style==='dial'){mesh(new THREE.CylinderGeometry(rr*.92,rr*.92,hw*.08,40).rotateZ(Math.PI/2),rimM,sx);N(10,a=>{const o=mesh(new THREE.CylinderGeometry(rr*.11,rr*.11,hw*.1,14).rotateZ(Math.PI/2),darkM,sx+sd*hw*.005);o.position.y=rr*.6*Math.cos(a);o.position.z=rr*.6*Math.sin(a)})}
+  else if(style==='magnum'){mesh(new THREE.CylinderGeometry(rr*.94,rr*.94,hw*.09,40).rotateZ(Math.PI/2),rimM,sx);N(5,a=>{const o=new THREE.Mesh(new THREE.BoxGeometry(hw*.12,rr*.5,rr*.2),darkM);o.position.set(sx+sd*hw*.01,rr*.56*Math.cos(a),rr*.56*Math.sin(a));o.rotation.x=a;g.add(o)})}
+  else if(style==='steel'){mesh(new THREE.CylinderGeometry(rr*.94,rr*.94,hw*.09,40).rotateZ(Math.PI/2),rimM,X(.74));N(6,a=>{const o=mesh(new THREE.CylinderGeometry(rr*.07,rr*.07,hw*.1,12).rotateZ(Math.PI/2),darkM,X(.745));o.position.y=rr*.62*Math.cos(a);o.position.z=rr*.62*Math.sin(a)});
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(rr*.34,20,10,0,Math.PI*2,0,Math.PI/2).rotateZ(-sd*Math.PI/2),rimM);dome.position.x=X(.78);g.add(dome)}
+  else if(style==='aero'){mesh(new THREE.CylinderGeometry(rr*.97,rr*.97,hw*.1,40).rotateZ(Math.PI/2),rimM,X(.8));N(10,a=>bar(a,rr*.3,a+.18,rr*.9,rr*.05,hw*.11,X(.83),darkM))}
   mesh(new THREE.CylinderGeometry(hub*1.15,hub*1.15,hw*.12,24).rotateZ(Math.PI/2),rimM,X(.9));
   mesh(new THREE.CylinderGeometry(hub*.7,hub*.7,hw*.14,20).rotateZ(Math.PI/2),accM,X(.94));
   return g}
@@ -5486,14 +5498,12 @@ function buildReal(d,t,R){
   const flame=new THREE.Group(),fm=new THREE.MeshBasicMaterial({color:0x7fe3ff,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
   for(const s of[-1,1]){const c=new THREE.Mesh(new THREE.ConeGeometry(.13,1.5,8).rotateX(-Math.PI/2).translate(0,0,-.75),fm);c.position.set(s*.45,.4,-Lr/2-.1);flame.add(c)}
   fm.color.setRGB(1.2,3,6);flame.visible=false;root.add(flame);
-  const rimCustom=t.rim!==9||t.rimStyle>0||!!sp.auto,rimM=new THREE.MeshStandardMaterial({color:COLORS[t.rim],roughness:t.rimStyle===0?.28:.18,metalness:.92,envMapIntensity:1.3}),rf=1+(t.rimSize-17)*.045;
-  const darkRim=new THREE.MeshStandardMaterial({color:0x1a1b1e,roughness:.5,metalness:.7}),accM=new THREE.MeshStandardMaterial({color:0xd9a441,roughness:.3,metalness:.9}),tyreM=new THREE.MeshStandardMaterial({color:0x151515,roughness:.9,metalness:0,side:THREE.DoubleSide});
-  const avgR=R.wheels.reduce((u,w)=>u+w.r,0)/Math.max(1,R.wheels.length),avgH=R.wheels.reduce((u,w)=>u+w.hw,0)/Math.max(1,R.wheels.length);
-  for(const w of R.wheels){const piv=new THREE.Group(),spin=new THREE.Group(),proc=t.rimStyle>=1||R.rt,wr0=R.rt?avgR:w.r,wh0=R.rt?avgH:w.hw;
-    for(const p of w.parts){if(R.rt)continue;if(p.rim&&t.rimStyle>=1)continue;const m=new THREE.Mesh(p.g,p.rim&&rimCustom?rimM:p.mat);m.castShadow=true;spin.add(m)}
-    if(R.rt){const r=wr0,h=wh0,pts=[[.6,-1],[.88,-1],[1,-.72],[1,.72],[.88,1],[.6,1]].map(a=>new THREE.Vector2(a[0]*r,a[1]*h));const g=new THREE.LatheGeometry(pts,32);g.rotateZ(Math.PI/2);const tm=new THREE.Mesh(g,tyreM);tm.castShadow=true;spin.add(tm)}
-    if(proc)spin.add(procRim(t.rimStyle,wr0,wh0,w.s,rimM,darkRim,accM));
-    piv.add(spin);piv.scale.set(1,rf,rf);piv.position.copy(w.c);if(t.kit>=2)piv.position.x+=w.s*.035*s0;piv.rotation.z=-w.s*t.camber*Math.PI/180;root.add(piv);wheels.push({piv,spin,front:w.front,r:w.r*sc*rf,s:w.s})}
+  const ws0=WSPEC[R.key]||{rin:17,s:'five',c:'silver'},defCol=WCOL[ws0.c]||0xcfd2d8,rimCol=t.rim!==9?COLORS[t.rim]:defCol,stl=t.rimStyle===1?'twin5':t.rimStyle===2?'multi':ws0.s;
+  const rimM=new THREE.MeshStandardMaterial({color:rimCol,roughness:ws0.c==='chrome'&&t.rim===9?.08:.24,metalness:.95,envMapIntensity:1.4}),darkRim=new THREE.MeshStandardMaterial({color:0x17181b,roughness:.55,metalness:.6}),accM=new THREE.MeshStandardMaterial({color:ws0.c==='gold'?0x222222:0xd9a441,roughness:.3,metalness:.9}),tyreM=new THREE.MeshStandardMaterial({color:0x141414,roughness:.92,metalness:0});
+  if(!R._ax){for(const f of[true,false]){const L=R.wheels.filter(w=>w.front===f);if(!L.length)continue;const r=Math.min(...L.map(w=>w.r)),hw=Math.min(.16,Math.max(.1,L.reduce((u,w)=>u+w.hw,0)/L.length));L.forEach(w=>{w.r=r;w.hw=hw;if(Math.abs(w.c.y-r)<.07)w.c.y=r})}R._ax=1}
+  for(const w of R.wheels){const piv=new THREE.Group(),spin=new THREE.Group(),ri=rimInfo(R.key,w.r),inch=Math.min(ri.max,ri.stock+Math.max(0,t.rimSize-17)),Rr=Math.min(w.r*.86,inch*.0127/sc);
+    spin.add(procWheel(stl,Rr,w.r,w.hw,w.s,rimM,darkRim,accM,tyreM,ws0.ww&&t.rimStyle===0));
+    piv.add(spin);piv.position.copy(w.c);if(t.kit>=2)piv.position.x+=w.s*.035*s0;piv.rotation.z=-w.s*t.camber*Math.PI/180;root.add(piv);wheels.push({piv,spin,front:w.front,r:w.r*sc,s:w.s})}
   if(t.glow&&GLOW[t.glow]){const g=new THREE.Mesh(new THREE.PlaneGeometry(W*1.9,Lr*1.5).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:GLOW[t.glow],map:glowTex(),transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));g.position.y=.06;root.add(g)}
   const dummy={material:new THREE.MeshBasicMaterial()};
   root.userData={def:d,wheels,flame,tl:[dummy],body,tailMat:dummy.material};
@@ -5696,7 +5706,7 @@ function setAnim(n,ts){const a=PL.acts[n];if(!a)return;if(PL.cur!==n){const o=PL
 function loadSoldier(){if(!THREE.GLTFLoader||typeof SOLDIER_B64==='undefined')return;
   try{const s=atob(SOLDIER_B64),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);
     new THREE.GLTFLoader().parse(u.buffer,'',gl=>{const m=gl.scene;m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;if(o.material)o.material.envMapIntensity=.5}});
-      const bb=new THREE.Box3().setFromObject(m),h=bb.max.y-bb.min.y;m.scale.setScalar(1.82/Math.max(h,.1));m.rotation.y=Math.PI;
+      const bb=new THREE.Box3().setFromObject(m),h=bb.max.y-bb.min.y;const sc0=2.0/Math.max(h,.1);m.scale.setScalar(sc0);m.position.y=-bb.min.y*sc0+.12;m.rotation.y=Math.PI;
       PL.mesh.children.slice().forEach(c=>PL.mesh.remove(c));PL.mesh.add(m);PL.mixer=new THREE.AnimationMixer(m);
       gl.animations.forEach(a=>{if(a.name!=='TPose')PL.acts[a.name]=PL.mixer.clipAction(a)});setAnim('Idle',1)},e=>console.warn('soldier',e))}catch(e){console.warn(e)}}
 /* ================= world objects, UI, race, camera, loop ================= */
@@ -5775,13 +5785,14 @@ const HR=['',''];
 function curPos(){return G.mode==='drive'?G.car:PL}
 function computeCtx(){
   ACT=null;let hint='';const p=curPos();if(!p||(G.mode!=='walk'&&G.mode!=='drive')){return}
-  for(const r of RARES){if(!r.car.owned&&dist2(p.x,p.z,r.car.x,r.car.z)<8){ACT={t:'برداشتن ماشین ویژه!',fn:()=>claimRare(r)};return}}
+  let rb=null,rbd=1e9;for(const r of RARES){if(r.car.owned)continue;const d=dist2(p.x,p.z,r.car.x,r.car.z);if(d<9&&d<rbd){rbd=d;rb=r}}
   for(const m of MARKERS){if(m.id==='cp'||!m.g.visible)continue;if(dist2(p.x,p.z,m.x,m.z)<m.r+1.5){
     if(m.id==='shop'){ACT={t:'ورود به نمایشگاه',fn:openShop};break}
     if(m.id==='garage'){if(G.car&&G.car.owned)ACT={t:'ورود به گاراژ تیون',fn:()=>openGarage(G.car)};else hint='برای تیون باید با ماشین خودت بیای';break}
     if(m.id==='race'){if(G.car&&!RACE.on)ACT={t:'شروع مسابقه',fn:startRace};else if(!G.car)hint='برای مسابقه سوار ماشین شو';break}}}
   if(!ACT&&G.mode==='walk'){let b=null,bd=5.6;for(const c of CARS){if(c.rare&&!c.owned)continue;const d=dist2(PL.x,PL.z,c.x,c.z);if(d<bd){bd=d;b=c}}
-    if(b)ACT={t:b.owned?'سوار شو ('+b.def.name+')':'سوار شو (ماشین قرضی)',fn:()=>enterCar(b)}}
+    if(b&&(!rb||bd<rbd*.6))ACT={t:b.owned?'سوار شو ('+b.def.name+')':'سوار شو (ماشین قرضی)',fn:()=>enterCar(b)}}
+  if(!ACT&&rb)ACT={t:'سوار شو: '+rb.car.def.name+' (ماشین ویژه!)',fn:()=>claimRare(rb)};
   const h=$('hint');h.textContent=hint;h.style.display=hint?'block':'none';
   const a=$('actBtn');if(ACT){a.style.display='grid';a.textContent=ACT.t}else a.style.display='none'}
 function doAct(){if(ACT&&(G.mode==='walk'||G.mode==='drive'))ACT.fn()}
@@ -5819,17 +5830,17 @@ function openGarage(c){G.car=c;c.x=MK.garage.x;c.z=MK.garage.z;c.psi=Math.PI/2;c
   for(const m of c.mesh.userData.wheels)if(m.front)m.piv.rotation.y=0;c.mesh.userData.flame.visible=false;placeCar(c);
   openPanelMode('garage');G.view={cur:new THREE.Vector3(c.x,c.y+.7,c.z),target:new THREE.Vector3(c.x,c.y+.7,c.z),dist:7.2,yaw:2.3,pitch:.2,idle:0};renderGarage()}
 function swatches(key,sel){return `<div class="sw">${COLORS.map((h,i)=>`<button style="background:${h}" class="${i===sel?'on':''}" data-a="${key}" data-i="${i}" aria-label="${COLOR_NAMES[i]}"></button>`).join('')}</div>`}
-const c0=()=>G.car,isReal=c=>!!(c&&c.def.model&&REAL[c.def.model]),noWheels=c=>isReal(c)&&!REAL[c.def.model].wheels.length,noGlass=c=>isReal(c)&&!REAL[c.def.model].hasGlass;
+const RI=()=>{const d=G.car.def,R=REAL[d.model],ro=R&&R.wheels[0]?R.wheels[0].r:.33;return rimInfo(d.model,ro)},c0=()=>G.car,isReal=c=>!!(c&&c.def.model&&REAL[c.def.model]),noWheels=c=>isReal(c)&&!REAL[c.def.model].wheels.length,noGlass=c=>isReal(c)&&!REAL[c.def.model].hasGlass;
 function lvlRow(c,t){return `<div class="row blk"><b>${c.name}</b><div class="lvls">${c.lv.map((l,i)=>{const own=i<=t.own[c.key];
   return `<button class="lvl${i===t[c.key]?' on':''}${own?' own':''}" data-a="lv" data-k="${c.key}" data-i="${i}">${l.n}<small>${own?(i===t[c.key]?'نصب شده':'نصب'):'$'+fa(l.p)}</small></button>`}).join('')}</div></div>`}
 function slRow(k,name,min,max,step,val,fmt,desc){return `<div class="sl"><label>${name}<span id="v_${k}">${fmt(val)}</span></label><input type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-s="${k}"><div class="note">${desc}</div></div>`}
-const SLF={gearing:v=>v<-.05?'سرعت نهایی بالاتر':v>.05?'شتاب بیشتر':'متعادل',stiff:v=>Math.round(v*100)+'٪',camber:v=>v+'°',drop:v=>v+' cm',diff:v=>Math.round(v*100)+'٪',rimSize:v=>v+'"'};
+const SLF={gearing:v=>v<-.05?'سرعت نهایی بالاتر':v>.05?'شتاب بیشتر':'متعادل',stiff:v=>Math.round(v*100)+'٪',camber:v=>v+'°',drop:v=>v+' cm',diff:v=>Math.round(v*100)+'٪',rimSize:v=>(RI().stock+v-17)+'"'};
 function renderGarage(){const c=G.car,t=c.tune,sc=PANEL.querySelector('.pbody');SCR=sc?sc.scrollTop:0;const P=c.perf;
   const tabs=[['perf','قدرت'],['chassis','شاسی'],['look','ظاهر'],['fine','تنظیم دقیق']].map(([k,n])=>`<button class="tab ${PTAB===k?'on':''}" data-a="tab" data-t="${k}">${n}</button>`).join('');
   let body='';
   if(PTAB==='perf')body=['engine','turbo','exhaust','ecu','gearbox','nos'].map(k=>lvlRow(TKEY[k],t)).join('');
   else if(PTAB==='chassis')body=['tires','susp','brakes','weight'].map(k=>lvlRow(TKEY[k],t)).join('');
-  else if(PTAB==='look')body=`<div class="sec">رنگ بدنه (رایگان)</div>${swatches('color',t.color)}${lvlRow(TKEY.finish,t)}${noWheels(c0())?'':`<div class="sec">رنگ رینگ (رایگان)</div>${swatches('rim',t.rim)}${lvlRow(TKEY.rimStyle,t)}${slRow('rimSize','اندازه رینگ',16,22,1,t.rimSize,SLF.rimSize,'رینگ بزرگ‌تر، ظاهر خفن‌تر.')}`}${lvlRow(TKEY.kit,t)}${lvlRow(TKEY.spoiler,t)}${lvlRow(TKEY.stripe,t)}<div class="sec">رنگ خط مسابقه</div>${swatches('stripeCol',t.stripeCol)}${noGlass(c0())?'':lvlRow(TKEY.tint,t)}${lvlRow(TKEY.glow,t)}`;
+  else if(PTAB==='look')body=`<div class="sec">رنگ بدنه (رایگان)</div>${swatches('color',t.color)}${lvlRow(TKEY.finish,t)}${noWheels(c0())?'':`<div class="sec">رنگ رینگ (رایگان)</div>${swatches('rim',t.rim)}${lvlRow(TKEY.rimStyle,t)}${slRow('rimSize','اندازه رینگ',17,17+RI().max-RI().stock,1,Math.max(17,t.rimSize),SLF.rimSize,'رینگ بزرگ‌تر، لاستیک کم‌ارتفاع‌تر (قطر کلی چرخ ثابت می‌ماند).')}`}${lvlRow(TKEY.kit,t)}${lvlRow(TKEY.spoiler,t)}${lvlRow(TKEY.stripe,t)}<div class="sec">رنگ خط مسابقه</div>${swatches('stripeCol',t.stripeCol)}${noGlass(c0())?'':lvlRow(TKEY.tint,t)}${lvlRow(TKEY.glow,t)}`;
   else body=slRow('gearing','نسبت دنده',-1,1,.05,t.gearing,SLF.gearing,'چپ: سرعت نهایی. راست: شتاب بهتر از جا کندن.')+slRow('stiff','سفتی فنر',0,1,.05,t.stiff,SLF.stiff,'سفت‌تر یعنی فرمان تیزتر ولی کمی ناصاف.')+
     slRow('camber','زاویه چرخ (کمبر)',0,5,.5,t.camber,SLF.camber,'کمی چسبندگی در پیچ بیشتر می‌کنه.')+slRow('drop','پایین آوردن ماشین',0,10,1,t.drop,SLF.drop,'ماشین کوتاه‌تر، کمتر هوا مقاومت می‌کنه.')+slRow('diff','قفل دیفرانسیل',0,1,.05,t.diff,SLF.diff,'بیشتر یعنی عقب راحت‌تر سر می‌خوره (دریفت).');
   const mine=ownedCars().map(o=>`<button class="sm ${o===c?'on':''}" data-a="swap" data-id="${o.id}">${o.def.name}</button>`).join('');
